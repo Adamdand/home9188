@@ -1,17 +1,25 @@
 import { Box, Button, Container, Typography, useMediaQuery, useTheme } from '@mui/material';
 import React, { useState, useEffect, useRef } from 'react';
 import { Logout, Business } from '@mui/icons-material';
+import { signOut } from 'firebase/auth';
+import type { User } from 'firebase/auth'; // Remove this line, 'User' is not exported from 'firebase/auth'
+import { auth } from '../config/firebase';
+import { doc, getDoc } from 'firebase/firestore';
+import { db } from '../config/firebase'; //
 
 type Page = 'home' | 'floor';
 
 interface HomePageProps {
   onNavigate: (page: Page, floor?: number) => void;
   onLogout: () => void;
+  user: User; // Add user prop to display user info if needed
 }
 
-const HomePage: React.FC<HomePageProps> = ({ onNavigate, onLogout }) => {
+const HomePage: React.FC<HomePageProps> = ({ onNavigate, onLogout, user }) => {
   const [showClouds, setShowClouds] = useState(true);
   const [showGround, setShowGround] = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
+   const [username, setUsername] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const theme = useTheme();
@@ -21,6 +29,36 @@ const HomePage: React.FC<HomePageProps> = ({ onNavigate, onLogout }) => {
   const floors = [19, 18, 17, 16, 15, 14, 12, 11, 10, 9, 8, 7, 6, 5, 3, 2, 1];
 
   const handleFloorClick = (floor: number) => onNavigate('floor', floor);
+
+  useEffect(() => {
+    const fetchUsername = async () => {
+      if (user?.uid) {
+        console.log("Fetching Firestore user for uid:", user.uid);
+        const userDoc = await getDoc(doc(db, "users", user.uid));
+        if (userDoc.exists()) {
+          setUsername(userDoc.data().username);
+        }
+      }
+    };
+
+    fetchUsername();
+  }, [user]);;
+
+  // Handle Firebase logout
+  const handleLogout = async () => {
+    setIsLoggingOut(true);
+    try {
+      await signOut(auth);
+      // The auth state change will be detected automatically by onAuthStateChanged
+      // in your main app component, so onLogout() will be called from there
+      onLogout();
+    } catch (error) {
+      console.error('Logout error:', error);
+      // You might want to show an error message to the user here
+    } finally {
+      setIsLoggingOut(false);
+    }
+  };
 
   const handleScroll = () => {
     if (scrollRef.current) {
@@ -54,6 +92,7 @@ const HomePage: React.FC<HomePageProps> = ({ onNavigate, onLogout }) => {
       @keyframes glow { 0%,100% { box-shadow:0 0 5px rgba(250,204,21,.5); } 50% { box-shadow:0 0 20px rgba(250,204,21,.8), 0 0 30px rgba(250,204,21,.4); } }
       @keyframes sway { 0% { transform: rotate(-2deg); } 100% { transform: rotate(2deg); } }
       @keyframes pulse { 0%,100% { opacity:1; transform:scale(1); } 50% { opacity:.5; transform:scale(1.2); } }
+      @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
 
       /* Walking animations */
       @keyframes walkPerson1 { 0% { right: -50px; } 100% { right: 50%; } }
@@ -356,30 +395,62 @@ const HomePage: React.FC<HomePageProps> = ({ onNavigate, onLogout }) => {
               >
                 Building 9188
               </Typography>
+              {/* Optional: Display user email */}
+              {/* {user && (
+                <Typography
+                  sx={{
+                    fontSize: { xs: 12, sm: 14 },
+                    color: 'rgba(255, 255, 255, 0.8)',
+                    ml: 2,
+                    display: { xs: 'none', sm: 'block' },
+                  }}
+                >
+                  welcome home {username || user.email}!
+                </Typography>
+              )} */}
             </Box>
 
             <Button
               variant="outlined"
-              onClick={onLogout}
-              startIcon={<Logout sx={{ fontSize: '16px !important' }} />}
+              onClick={handleLogout}
+              disabled={isLoggingOut}
+              startIcon={
+                isLoggingOut ? (
+                  <Box
+                    sx={{
+                      width: 16,
+                      height: 16,
+                      border: '2px solid #9ca3af',
+                      borderTop: '2px solid #4f46e5',
+                      borderRadius: '50%',
+                      animation: 'spin 1s linear infinite',
+                    }}
+                  />
+                ) : (
+                  <Logout sx={{ fontSize: '16px !important' }} />
+                )
+              }
               sx={{
                 textTransform: 'none',
                 py: { xs: 0.75, sm: 1 },
                 px: { xs: 1.5, sm: 2.5 },
                 fontSize: { xs: 12, sm: 14 },
                 borderRadius: 2,
-                borderColor: '#e5e7eb',
-                color: '#6b7280',
-                backgroundColor: '#f9fafb',
+                borderColor: isLoggingOut ? '#9ca3af' : '#e5e7eb',
+                color: isLoggingOut ? '#9ca3af' : '#6b7280',
+                backgroundColor: isLoggingOut ? '#f3f4f6' : '#f9fafb',
                 transition: 'all 0.2s ease',
                 '&:hover': {
-                  borderColor: '#4f46e5',
-                  backgroundColor: '#f0f9ff',
-                  color: '#4f46e5',
+                  borderColor: isLoggingOut ? '#9ca3af' : '#4f46e5',
+                  backgroundColor: isLoggingOut ? '#f3f4f6' : '#f0f9ff',
+                  color: isLoggingOut ? '#9ca3af' : '#4f46e5',
+                },
+                '&:disabled': {
+                  opacity: 0.7,
                 },
               }}
             >
-              Logout
+              {isLoggingOut ? 'Signing out...' : 'Logout'}
             </Button>
           </Box>
 
@@ -396,6 +467,23 @@ const HomePage: React.FC<HomePageProps> = ({ onNavigate, onLogout }) => {
             </Box>
           )}
 
+          {/* New Welcome line, centered above "Choose Your Floor" */}
+          {user && (
+            <Typography
+              align="center"
+              sx={{
+                mt: { xs: 8, sm: 10, md:4 }, // ensures space from header
+                mb: { xs: 0, sm: 0 },  // small gap before "Choose Your Floor"
+                fontSize: { xs: 14, sm: 16, md: 18 },
+                color: 'rgba(255, 255, 255, 0.85)',
+                fontWeight: 500,
+              }}
+            >
+              welcome home {username || user.email}!
+            </Typography>
+          )}
+
+          {/* Welcome Header */}
           <Typography
             component="h1"
             align="center"
@@ -407,8 +495,8 @@ const HomePage: React.FC<HomePageProps> = ({ onNavigate, onLogout }) => {
               backgroundClip: 'text',
               WebkitBackgroundClip: 'text',
               color: 'transparent',
-              mb: { xs: 3, sm: 4 },
-              mt: { xs: 6, sm: 8 },
+              mb: { xs: 3, sm: 4, md: 3 },
+              mt: { xs: 0, sm: 0 },
               fontSize: 'clamp(24px, 5vw, 42px)',
               letterSpacing: '-0.025em',
             }}

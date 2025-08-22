@@ -4,43 +4,34 @@ import LoginPage from './LoginPage';
 import HomePage from './HomePage';
 import FloorCommentPage from './FloorCommentPage';
 import AddCommentPage from './AddCommentPage';
+import { User } from 'firebase/auth';
 
 export type Page = 'login' | 'home' | 'floor' | 'addComment';
-
-interface Comment {
-  id: string;
-  text: string;
-  timestamp: Date;
-  floor: number;
-}
 
 const AppRouter: React.FC = () => {
   const [currentPage, setCurrentPage] = useState<Page>('login');
   const [selectedFloor, setSelectedFloor] = useState<number>(1);
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [user, setUser] = useState<User | null>(null);
 
   const navigateToPage = (page: Page, floor?: number) => {
-    // If floor can be 0 or 999 etc., don’t rely on truthiness:
     if (typeof floor === 'number') setSelectedFloor(floor);
 
-    // Release any focused input so iOS can reset zoom
     if (document.activeElement instanceof HTMLElement) {
       document.activeElement.blur();
     }
 
-    // Optional: snap back to top to avoid residual scroll offsets
     window.scrollTo({ top: 0, left: 0, behavior: 'instant' as ScrollBehavior });
 
     setCurrentPage(page);
   };
 
-  const handleLogin = () => {
-    setIsLoggedIn(true);
+  const handleLogin = (firebaseUser: User) => {
+    setUser(firebaseUser); 
     setCurrentPage('home');
   };
 
   const handleLogout = () => {
-    setIsLoggedIn(false);
+    setUser(null);
     setCurrentPage('login');
   };
 
@@ -49,19 +40,20 @@ const AppRouter: React.FC = () => {
       {currentPage === 'login' && (
         <LoginPage onLogin={handleLogin} />
       )}
-      {currentPage === 'home' && isLoggedIn && (
+      {currentPage === 'home' && user && (
         <HomePage 
           onNavigate={navigateToPage}
           onLogout={handleLogout}
+          user={user} 
         />
       )}
-      {currentPage === 'floor' && isLoggedIn && (
+      {currentPage === 'floor' && user && (
         <FloorCommentPage 
           floor={selectedFloor}
           onNavigate={navigateToPage}
         />
       )}
-      {currentPage === 'addComment' && isLoggedIn && (
+      {currentPage === 'addComment' && user && (
         <AddCommentPage 
           floor={selectedFloor}
           onNavigate={navigateToPage}

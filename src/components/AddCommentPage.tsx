@@ -4,6 +4,7 @@ import { db } from '../config/firebase';
 import { Page } from './AppRouter';
 import { Box, Button, Container, Stack, TextField, Typography, Avatar, Chip, Alert } from '@mui/material';
 import { Home, ArrowBack, Send, Person, Edit, AccessTime } from '@mui/icons-material';
+import { getAuth } from 'firebase/auth';
 
 interface AddCommentPageProps {
   floor: number;
@@ -22,14 +23,29 @@ const AddCommentPage: React.FC<AddCommentPageProps> = ({ floor, onNavigate }) =>
       setError('Please enter a comment');
       return;
     }
+
     setIsSubmitting(true);
     setError('');
+
     try {
+      const auth = getAuth();
+      const user = auth.currentUser;
+
+      if (!user) {
+        setError('You must be logged in to post a comment');
+        setIsSubmitting(false);
+        return;
+      }
+
       await addDoc(collection(db, 'comments'), {
         text: comment.trim(),
         floor,
         timestamp: serverTimestamp(),
+        userId: user.uid,
+        email: user.email,
+        username: user.displayName || user.email?.split('@')[0] || 'Anonymous'
       });
+
       onNavigate('floor', floor);
     } catch (err) {
       console.error('Error adding comment:', err);

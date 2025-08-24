@@ -8,7 +8,8 @@ import {
   onAuthStateChanged,
   signOut,
   updateProfile,
-  User
+  User,
+  sendEmailVerification
 } from 'firebase/auth';
 import { doc, setDoc, getDoc, query, collection, where, getDocs } from 'firebase/firestore';
 import { auth, db } from '../config/firebase';
@@ -53,20 +54,68 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
   const [showPassword, setShowPassword] = useState(false);
   const [mode, setMode] = useState<'login' | 'signup' | 'reset'>('login');
   const [isCheckingUsername, setIsCheckingUsername] = useState(false);
+  const [needsVerification, setNeedsVerification] = useState(false);
 
   // UI feedback for username field
   const [usernameHelper, setUsernameHelper] = useState<string>('');
   const [usernameFieldError, setUsernameFieldError] = useState<boolean>(false);
 
+  // Enhanced email validation
+  const [emailError, setEmailError] = useState<string>('');
+
   // Check for existing authentication state
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
-      if (user) {
+      if (user && user.emailVerified) {
         onLogin(user);
       }
     });
     return () => unsubscribe();
   }, [onLogin]);
+
+  // Enhanced email validation function
+  const validateEmailFormat = (email: string): string | null => {
+    const trimmedEmail = email.trim().toLowerCase();
+    
+    // Basic format check
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(trimmedEmail)) {
+      return 'Please enter a valid email address';
+    }
+
+    // Check for common typos in popular domains
+    const commonDomains = {
+      'gmail.com': ['gmai.com', 'gmial.com', 'gmail.co', 'gmal.com'],
+      'yahoo.com': ['yaho.com', 'yahoo.co', 'yahho.com'],
+      'outlook.com': ['outook.com', 'outlook.co'],
+      'hotmail.com': ['hotmai.com', 'hotmal.com'],
+    };
+
+    const domain = trimmedEmail.split('@')[1];
+    for (const [correctDomain, typos] of Object.entries(commonDomains)) {
+      if (typos.includes(domain)) {
+        return `Did you mean ${trimmedEmail.replace(domain, correctDomain)}?`;
+      }
+    }
+
+    // Check for obviously fake domains
+    const fakeDomains = ['test.com', 'example.com', 'fake.com', 'temp.com'];
+    if (fakeDomains.includes(domain)) {
+      return 'Please use a real email address';
+    }
+
+    // Check for suspicious patterns
+    if (domain.includes('..') || domain.startsWith('.') || domain.endsWith('.')) {
+      return 'Please enter a valid email address';
+    }
+
+    return null;
+  };
+
+  const handleEmailBlur = () => {
+    const error = validateEmailFormat(email);
+    setEmailError(error || '');
+  };
 
   // Check if username is available
   const checkUsernameAvailable = async (usernameToCheck: string): Promise<boolean> => {
@@ -119,18 +168,49 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
     }
   };
 
+  // Function to resend verification email
+  const handleResendVerification = async () => {
+    if (!email || !password) {
+      setError('Please enter your email and password');
+      return;
+    }
+
+    setIsLoading(true);
+    setError('');
+    setSuccess('');
+
+    try {
+      // Sign in temporarily to get user object
+      const tempCredential = await signInWithEmailAndPassword(auth, email, password);
+      if (tempCredential.user && !tempCredential.user.emailVerified) {
+        await sendEmailVerification(tempCredential.user);
+        setSuccess('Verification email sent! Please check your inbox and spam folder.');
+        await signOut(auth); // Sign out again
+      } else if (tempCredential.user?.emailVerified) {
+        setError('Your email is already verified. You can log in now.');
+        setNeedsVerification(false);
+      }
+    } catch (err: any) {
+      setError('Failed to resend verification email. Please check your credentials.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const handleEmailPasswordAuth = async () => {
     if (!email || !password) {
       setError('Please enter both email and password');
       return;
     }
 
-    if (mode === 'signup') {
-      // if (!displayName.trim()) {
-      //   setError('Please enter your name');
-      //   return;
-      // }
+    // Validate email format before proceeding
+    const emailValidationError = validateEmailFormat(email);
+    if (emailValidationError) {
+      setError(emailValidationError);
+      return;
+    }
 
+    if (mode === 'signup') {
       const normalizedUsername = username.toLowerCase().trim();
 
       if (!normalizedUsername) {
@@ -154,43 +234,62 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
     setIsLoading(true);
     setError('');
     setSuccess('');
+    setNeedsVerification(false);
 
     try {
       let userCredential;
 
       if (mode === 'login') {
         userCredential = await signInWithEmailAndPassword(auth, email, password);
+        
+        // Check if email is verified for login
+        if (!userCredential.user.emailVerified) {
+          setNeedsVerification(true);
+          setError('Please verify your email address before logging in. Check your inbox for a verification email, or click "Resend Verification Email" below.');
+          await signOut(auth); // Sign them out until verified
+          return;
+        }
       } else if (mode === 'signup') {
         userCredential = await createUserWithEmailAndPassword(auth, email, password);
 
         if (userCredential.user) {
-          // Update the user's profile with their display name
-          // await updateProfile(userCredential.user, {
-          //   displayName: displayName.trim()
-          // });
-
-          // Store user data in Firestore
+          // Store user data in Firestore with verified status
           await setDoc(doc(db, 'users', userCredential.user.uid), {
             uid: userCredential.user.uid,
             email: userCredential.user.email,
-            // displayName: displayName.trim(),
             username: username.toLowerCase().trim(),
+            emailVerified: false, // Track verification status
             createdAt: new Date(),
             updatedAt: new Date()
           });
 
-          // Refresh the user object to include the updated profile
-          await userCredential.user.reload();
+          // Send verification email
+          try {
+            await sendEmailVerification(userCredential.user);
+            setSuccess('Account created! Please check your email and click the verification link before logging in. Don\'t forget to check your spam folder.');
+            
+            // Sign them out until they verify
+            await signOut(auth);
+            setMode('login');
+            setNeedsVerification(true);
+            return; // Don't call onLogin yet
+          } catch (verificationError) {
+            console.error('Error sending verification email:', verificationError);
+            setError('Account created but verification email failed to send. Please try logging in and we\'ll resend it.');
+            await signOut(auth);
+            setMode('login');
+            setNeedsVerification(true);
+            return;
+          }
         }
       }
 
-      if (userCredential?.user) {
-        // Important: release focus so Safari can reset zoom
+      if (userCredential?.user && userCredential.user.emailVerified) {
+        // Only proceed if email is verified
         if (document.activeElement instanceof HTMLElement) {
           document.activeElement.blur();
         }
         onLogin(userCredential.user);
-        // Optional: ensure layout resets
         window.scrollTo({ top: 0, left: 0, behavior: 'instant' as ScrollBehavior });
       }
     } catch (err: any) {
@@ -224,43 +323,16 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
     }
   };
 
-  // const handleGoogleSignIn = async () => {
-  //   setIsLoading(true);
-  //   setError('');
-  //   setSuccess('');
-
-  //   try {
-  //     const provider = new GoogleAuthProvider();
-  //     const userCredential = await signInWithPopup(auth, provider);
-
-  //     if (userCredential.user) {
-  //       if (document.activeElement instanceof HTMLElement) {
-  //         document.activeElement.blur();
-  //       }
-  //       onLogin(userCredential.user);
-  //       window.scrollTo({ top: 0, left: 0, behavior: 'instant' as ScrollBehavior });
-  //     }
-  //   } catch (err: any) {
-  //     console.error('Google auth error:', err);
-
-  //     switch (err.code) {
-  //       case 'auth/popup-closed-by-user':
-  //         setError('Sign-in was cancelled. Please try again.');
-  //         break;
-  //       case 'auth/popup-blocked':
-  //         setError('Popup was blocked. Please allow popups and try again.');
-  //         break;
-  //       default:
-  //         setError('Google sign-in failed. Please try again.');
-  //     }
-  //   } finally {
-  //     setIsLoading(false);
-  //   }
-  // };
-
   const handlePasswordReset = async () => {
     if (!email) {
       setError('Please enter your email address first');
+      return;
+    }
+
+    // Validate email format
+    const emailValidationError = validateEmailFormat(email);
+    if (emailValidationError) {
+      setError(emailValidationError);
       return;
     }
 
@@ -485,109 +557,65 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
           </Alert>
         )}
 
-        {/* Google Sign In Button */}
-        {/* <Button
-          variant="outlined"
-          onClick={handleGoogleSignIn}
-          disabled={isLoading}
-          fullWidth
-          startIcon={<Google />}
-          sx={{
-            py: { xs: 1.5, sm: 1.8 },
-            borderRadius: 2,
-            textTransform: 'none',
-            fontSize: { xs: 15, sm: 16 },
-            fontWeight: 600,
-            mb: 3,
-            border: '1px solid #e5e7eb',
-            color: '#374151',
-            '&:hover': {
-              border: '1px solid #d1d5db',
-              backgroundColor: '#f9fafb',
-            },
-          }}
-        >
-          Continue with Google
-        </Button> */}
-
-        {/* <Divider sx={{ my: 3 }}>
-          <Typography sx={{ color: '#9ca3af', fontSize: 14 }}>
-            or continue with email
-          </Typography>
-        </Divider> */}
-
-        {/* Name & Username (only for signup) */}
+        {/* Username (only for signup) */}
         {mode === 'signup' && (
-          <>
-            {/* Name (display name shown in UI) */}
-            
+          <Box sx={{ mb: 3 }}>
+            <Typography
+              sx={{
+                fontWeight: 600,
+                color: '#374151',
+                fontSize: { xs: 14, sm: 16 },
+                mb: 1.5,
+              }}
+            >
+              Username
+            </Typography>
 
-            {/* Username (unique handle, stored in Firestore) */}
-            <Box sx={{ mb: 0 }}>
-              <Typography
-                sx={{
-                  fontWeight: 600,
-                  color: '#374151',
+            <TextField
+              type="text"
+              placeholder="Choose a unique username"
+              value={username}
+              onChange={(e) => {
+                const v = e.target.value.replace(/\s+/g, '');
+                setUsername(v);
+                setUsernameHelper('');
+                setUsernameFieldError(false);
+              }}
+              onBlur={handleUsernameBlur}
+              onKeyPress={handleKeyPress}
+              disabled={isLoading}
+              fullWidth
+              error={usernameFieldError}
+              helperText={
+                isCheckingUsername ? 'Checking availability...' : (usernameHelper || ' ')
+              }
+              sx={{
+                '& .MuiOutlinedInput-root': {
+                  borderRadius: 2,
+                  backgroundColor: '#f9fafb',
+                  border: '1px solid #e5e7eb',
                   fontSize: { xs: 14, sm: 16 },
-                  mb: 1.5,
-                }}
-              >
-                Username
-              </Typography>
-
-              <TextField
-                type="text"
-                placeholder="Choose a unique username"
-                value={username}
-                onChange={(e) => {
-                  const v = e.target.value.replace(/\s+/g, '');
-                  setUsername(v);
-                  setUsernameHelper('');
-                  setUsernameFieldError(false);
-                }}
-                onBlur={handleUsernameBlur}
-                onKeyPress={handleKeyPress}
-                disabled={isLoading}
-                fullWidth
-                error={usernameFieldError}
-                helperText={
-                  isCheckingUsername ? 'Checking availability...' : (usernameHelper || ' ')
-                }
-                // InputProps={{
-                //   startAdornment: (
-                //     <InputAdornment position="start">
-                //       <AlternateEmail sx={{ color: '#9ca3af', fontSize: 20 }} />
-                //     </InputAdornment>
-                //   ),
-                // }}
-                sx={{
-                  '& .MuiOutlinedInput-root': {
-                    borderRadius: 2,
-                    backgroundColor: '#f9fafb',
-                    border: '1px solid #e5e7eb',
-                    fontSize: { xs: 14, sm: 16 },
-                    '&:hover': {
-                      backgroundColor: '#ffffff',
-                      '& .MuiOutlinedInput-notchedOutline': {
-                        borderColor: '#d1d5db',
-                      },
-                    },
-                    '&.Mui-focused': {
-                      backgroundColor: '#ffffff',
-                      boxShadow: '0 0 0 3px rgba(79, 70, 229, 0.1)',
-                      '& .MuiOutlinedInput-notchedOutline': {
-                        borderColor: '#4f46e5',
-                        borderWidth: '2px',
-                      },
+                  '&:hover': {
+                    backgroundColor: '#ffffff',
+                    '& .MuiOutlinedInput-notchedOutline': {
+                      borderColor: '#d1d5db',
                     },
                   },
-                  '& .MuiOutlinedInput-notchedOutline': {
-                    border: 'none',
+                  '&.Mui-focused': {
+                    backgroundColor: '#ffffff',
+                    boxShadow: '0 0 0 3px rgba(79, 70, 229, 0.1)',
+                    '& .MuiOutlinedInput-notchedOutline': {
+                      borderColor: '#4f46e5',
+                      borderWidth: '2px',
+                    },
                   },
-                }}
-              />
-            </Box>
-          </>
+                },
+                '& .MuiOutlinedInput-notchedOutline': {
+                  border: 'none',
+                },
+              }}
+            />
+          </Box>
         )}
 
         {/* Email Input */}
@@ -607,10 +635,17 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
             type="email"
             placeholder="Enter your email"
             value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            onChange={(e) => {
+              setEmail(e.target.value);
+              setEmailError(''); // Clear error on change
+              setNeedsVerification(false); // Clear verification state
+            }}
+            onBlur={handleEmailBlur}
             onKeyPress={handleKeyPress}
             disabled={isLoading}
             fullWidth
+            error={!!emailError}
+            helperText={emailError || ' '}
             InputProps={{
               startAdornment: (
                 <InputAdornment position="start">
@@ -781,6 +816,33 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
           )}
         </Button>
 
+        {/* Resend Verification Button */}
+        {mode === 'login' && needsVerification && (
+          <Button
+            variant="outlined"
+            onClick={handleResendVerification}
+            disabled={isLoading}
+            fullWidth
+            startIcon={<Email />}
+            sx={{
+              mt: 2,
+              py: { xs: 1.5, sm: 1.8 },
+              borderRadius: 2,
+              textTransform: 'none',
+              fontSize: { xs: 15, sm: 16 },
+              fontWeight: 600,
+              borderColor: '#4f46e5',
+              color: '#4f46e5',
+              '&:hover': {
+                borderColor: '#4338ca',
+                backgroundColor: 'rgba(79, 70, 229, 0.04)',
+              },
+            }}
+          >
+            Resend Verification Email
+          </Button>
+        )}
+
         {/* Mode Toggle Links */}
         <Box sx={{ mt: 3, textAlign: 'center' }}>
           {mode === 'login' && (
@@ -789,7 +851,12 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
                 Don't have an account?{' '}
                 <Link
                   component="button"
-                  onClick={() => setMode('signup')}
+                  onClick={() => {
+                    setMode('signup');
+                    setNeedsVerification(false);
+                    setError('');
+                    setSuccess('');
+                  }}
                   sx={{ color: '#4f46e5', fontWeight: 600, textDecoration: 'none' }}
                 >
                   Sign up
@@ -799,7 +866,12 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
                 Forgot your password?{' '}
                 <Link
                   component="button"
-                  onClick={() => setMode('reset')}
+                  onClick={() => {
+                    setMode('reset');
+                    setNeedsVerification(false);
+                    setError('');
+                    setSuccess('');
+                  }}
                   sx={{ color: '#4f46e5', fontWeight: 600, textDecoration: 'none' }}
                 >
                   Reset it
@@ -813,7 +885,12 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
               Already have an account?{' '}
               <Link
                 component="button"
-                onClick={() => setMode('login')}
+                onClick={() => {
+                  setMode('login');
+                  setNeedsVerification(false);
+                  setError('');
+                  setSuccess('');
+                }}
                 sx={{ color: '#4f46e5', fontWeight: 600, textDecoration: 'none' }}
               >
                 Sign in
@@ -826,7 +903,12 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
               Remember your password?{' '}
               <Link
                 component="button"
-                onClick={() => setMode('login')}
+                onClick={() => {
+                  setMode('login');
+                  setNeedsVerification(false);
+                  setError('');
+                  setSuccess('');
+                }}
                 sx={{ color: '#4f46e5', fontWeight: 600, textDecoration: 'none' }}
               >
                 Back to login

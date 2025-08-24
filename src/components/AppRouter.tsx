@@ -4,9 +4,10 @@ import LoginPage from './LoginPage';
 import HomePage from './HomePage';
 import FloorCommentPage from './FloorCommentPage';
 import AddCommentPage from './AddCommentPage';
+import AccountPage from "./AccountPage";
 import { User } from 'firebase/auth';
 
-export type Page = 'login' | 'home' | 'floor' | 'addComment';
+export type Page = 'login' | 'home' | 'floor' | 'addComment' | 'account';
 
 const AppRouter: React.FC = () => {
   const [currentPage, setCurrentPage] = useState<Page>('login');
@@ -58,6 +59,9 @@ const AppRouter: React.FC = () => {
           floor={selectedFloor}
           onNavigate={navigateToPage}
         />
+      )}
+      {currentPage === "account" && user && (
+        <AccountPage user={user} onNavigate={navigateToPage} />
       )}
     </Box>
   );

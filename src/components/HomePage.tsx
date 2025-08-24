@@ -1,4 +1,5 @@
 import { Box, Button, Container, Typography, useMediaQuery, useTheme } from '@mui/material';
+import { AccountCircle } from "@mui/icons-material";
 import React, { useState, useEffect, useRef } from 'react';
 import { Logout, Business } from '@mui/icons-material';
 import { signOut } from 'firebase/auth';
@@ -6,8 +7,9 @@ import type { User } from 'firebase/auth'; // Remove this line, 'User' is not ex
 import { auth } from '../config/firebase';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../config/firebase'; //
+import type { Page } from './AppRouter';
 
-type Page = 'home' | 'floor';
+// type Page = 'home' | 'floor';
 
 interface HomePageProps {
   onNavigate: (page: Page, floor?: number) => void;
@@ -410,6 +412,33 @@ const HomePage: React.FC<HomePageProps> = ({ onNavigate, onLogout, user }) => {
               )} */}
             </Box>
 
+           <Box sx={{ display: "flex", gap: 1.5 }}>
+            {/* Account button */}
+            <Button
+              variant="outlined"
+              onClick={() => onNavigate("account")}
+              startIcon={<AccountCircle sx={{ fontSize: 20 }} />}
+              sx={{
+                textTransform: "none",
+                py: { xs: 0.75, sm: 1 },
+                px: { xs: 1.5, sm: 2.5 },
+                fontSize: { xs: 12, sm: 14 },
+                borderRadius: 2,
+                borderColor: "#e5e7eb",
+                color: "#6b7280",
+                backgroundColor: "#f9fafb",
+                transition: "all 0.2s ease",
+                "&:hover": {
+                  borderColor: "#4f46e5",
+                  backgroundColor: "#f0f9ff",
+                  color: "#4f46e5",
+                },
+              }}
+            >
+              Account
+            </Button>
+
+            {/* Logout button */}
             <Button
               variant="outlined"
               onClick={handleLogout}
@@ -420,38 +449,40 @@ const HomePage: React.FC<HomePageProps> = ({ onNavigate, onLogout, user }) => {
                     sx={{
                       width: 16,
                       height: 16,
-                      border: '2px solid #9ca3af',
-                      borderTop: '2px solid #4f46e5',
-                      borderRadius: '50%',
-                      animation: 'spin 1s linear infinite',
+                      border: "2px solid #9ca3af",
+                      borderTop: "2px solid #4f46e5",
+                      borderRadius: "50%",
+                      animation: "spin 1s linear infinite",
                     }}
                   />
                 ) : (
-                  <Logout sx={{ fontSize: '16px !important' }} />
+                  <Logout sx={{ fontSize: "16px !important" }} />
                 )
               }
               sx={{
-                textTransform: 'none',
+                textTransform: "none",
                 py: { xs: 0.75, sm: 1 },
                 px: { xs: 1.5, sm: 2.5 },
                 fontSize: { xs: 12, sm: 14 },
                 borderRadius: 2,
-                borderColor: isLoggingOut ? '#9ca3af' : '#e5e7eb',
-                color: isLoggingOut ? '#9ca3af' : '#6b7280',
-                backgroundColor: isLoggingOut ? '#f3f4f6' : '#f9fafb',
-                transition: 'all 0.2s ease',
-                '&:hover': {
-                  borderColor: isLoggingOut ? '#9ca3af' : '#4f46e5',
-                  backgroundColor: isLoggingOut ? '#f3f4f6' : '#f0f9ff',
-                  color: isLoggingOut ? '#9ca3af' : '#4f46e5',
+                borderColor: isLoggingOut ? "#9ca3af" : "#e5e7eb",
+                color: isLoggingOut ? "#9ca3af" : "#6b7280",
+                backgroundColor: isLoggingOut ? "#f3f4f6" : "#f9fafb",
+                transition: "all 0.2s ease",
+                "&:hover": {
+                  borderColor: isLoggingOut ? "#9ca3af" : "#4f46e5",
+                  backgroundColor: isLoggingOut ? "#f3f4f6" : "#f0f9ff",
+                  color: isLoggingOut ? "#9ca3af" : "#4f46e5",
                 },
-                '&:disabled': {
+                "&:disabled": {
                   opacity: 0.7,
                 },
               }}
             >
-              {isLoggingOut ? 'Signing out...' : 'Logout'}
+              {isLoggingOut ? "Signing out..." : "Logout"}
             </Button>
+          </Box>
+
           </Box>
 
           {/* Clouds */}

@@ -625,7 +625,7 @@ const HomePage: React.FC<HomePageProps> = ({ onNavigate, onLogout, user }) => {
                       // px: { xs: 2, sm: 3, md: 4 },
                       py: { xs: 1, sm: 1.5 },
                       height: { xs: 50, sm: 60, md: 65 },
-                      mt: index === 0 ? 2 : 1,
+                      mt: index === 0 ? 2 : 3,
                       mb: index === floors.length - 1 ? 3 : 0,
                       cursor: 'pointer',
                       borderRadius: 2,

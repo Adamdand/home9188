@@ -500,7 +500,7 @@ const HomePage: React.FC<HomePageProps> = ({ onNavigate, onLogout, user }) => {
                 fontWeight: 500,
               }}
             >
-              welcome home {username || user.email}!
+              Welcome home {username || user.email}!
             </Typography>
           )}
 

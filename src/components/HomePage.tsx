@@ -328,7 +328,7 @@ const HomePage: React.FC<HomePageProps> = ({ onNavigate, onLogout, user }) => {
     <>
       <Box
         sx={{
-          height: '100svh',
+           height: '100svh',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
@@ -338,16 +338,6 @@ const HomePage: React.FC<HomePageProps> = ({ onNavigate, onLogout, user }) => {
           position: 'relative',
           overflow: 'hidden',
           overscrollBehavior: 'none',
-          '&::before': {
-            content: '""',
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            background: 'radial-gradient(circle at 20% 30%, rgba(147, 51, 234, 0.2) 0%, transparent 70%)',
-            pointerEvents: 'none',
-          },
         }}
       >
         {/* Floating particles */}
@@ -355,8 +345,8 @@ const HomePage: React.FC<HomePageProps> = ({ onNavigate, onLogout, user }) => {
         <FloatingParticle left="85%" top="15%" delay={1} />
         <FloatingParticle left="70%" top="80%" delay={2} />
 
-        <Container
-          maxWidth="lg"
+      <Container
+          maxWidth={false}
           disableGutters
           sx={{
             position: 'relative',
@@ -506,7 +496,7 @@ const HomePage: React.FC<HomePageProps> = ({ onNavigate, onLogout, user }) => {
                 mt: { xs: 8, sm: 10, md:4 }, // ensures space from header
                 mb: { xs: 0, sm: 0 },  // small gap before "Choose Your Floor"
                 fontSize: { xs: 14, sm: 16, md: 18 },
-                color: 'rgba(255, 255, 255, 0.85)',
+                color: '#4f46e5',
                 fontWeight: 500,
               }}
             >
@@ -535,12 +525,13 @@ const HomePage: React.FC<HomePageProps> = ({ onNavigate, onLogout, user }) => {
             Choose Your Floor
           </Typography>
 
-          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             {/* Modern Building */}
             <Box
               sx={{
-                width: { xs: 320, sm: 380, md: 450 },
-                height: { xs: '70vh', sm: '70vh', md: '70vh' },
+                width: { xs: '90%', sm: '85%', md: '75%' },   // 🔥 take up more screen width
+                maxWidth: '900px',                            // cap it on big screens
+                height: { xs: '70vh', sm: '75vh', md: '75vh' },
                 position: 'relative',
                 background: 'linear-gradient(180deg, #1e40af 0%, #1e3a8a 50%, #1e293b 100%)',
                 borderRadius: '20px 20px 4px 4px',
@@ -623,15 +614,15 @@ const HomePage: React.FC<HomePageProps> = ({ onNavigate, onLogout, user }) => {
                 </Box>
 
                 {/* Floor levels */}
-                {floors.map((floorNum, index) => (
+               {floors.map((floorNum, index) => (
+                <Box key={floorNum} sx={{ position: 'relative' }}>
                   <Box
-                    key={floorNum}
                     onClick={() => handleFloorClick(floorNum)}
                     sx={{
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'space-between',
-                      px: { xs: 2, sm: 3, md: 4 },
+                      // px: { xs: 2, sm: 3, md: 4 },
                       py: { xs: 1, sm: 1.5 },
                       height: { xs: 50, sm: 60, md: 65 },
                       mt: index === 0 ? 2 : 1,
@@ -645,7 +636,6 @@ const HomePage: React.FC<HomePageProps> = ({ onNavigate, onLogout, user }) => {
                         backgroundColor: 'rgba(79, 70, 229, 0.1)',
                         transform: 'translateX(4px)',
                       },
-                      /* When the row is hovered, style child windows and dots */
                       '&:hover .window': {
                         background: 'linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%)',
                         borderColor: '#d97706',
@@ -670,16 +660,17 @@ const HomePage: React.FC<HomePageProps> = ({ onNavigate, onLogout, user }) => {
                       },
                     }}
                   >
-                    {/* Windows */}
-                    <Box sx={{ display: 'flex', gap: { xs: 1, sm: 1.5 } }}>
+                   {/* Windows first (left side) */}
+                    <Box sx={{ display: 'flex', flex: 1, gap: { xs: 1, sm: 1.5 }, flexShrink: 0 }}>
                       {[1, 2, 3].map((windowIndex) => (
                         <Box
                           key={windowIndex}
                           className="window"
                           sx={{
                             position: 'relative',
-                            width: { xs: 45, sm: 55, md: 65 },
-                            height: { xs: 28, sm: 35, md: 40 },
+                            flex: 1,
+                            minWidth: 0,
+                            height: { xs: 40, sm: 50, md: 60 },
                             background: 'linear-gradient(135deg, #e5e7eb 0%, #d1d5db 100%)',
                             borderRadius: 1,
                             border: '2px solid #9ca3af',
@@ -687,7 +678,7 @@ const HomePage: React.FC<HomePageProps> = ({ onNavigate, onLogout, user }) => {
                             overflow: 'hidden',
                           }}
                         >
-                          {/* Window cross bars */}
+                          {/* cross bars */}
                           <Box
                             sx={{
                               position: 'absolute',
@@ -697,7 +688,6 @@ const HomePage: React.FC<HomePageProps> = ({ onNavigate, onLogout, user }) => {
                               height: 1.5,
                               bgcolor: '#6b7280',
                               transform: 'translateY(-50%)',
-                              transition: 'background-color 0.3s ease',
                             }}
                           />
                           <Box
@@ -709,15 +699,23 @@ const HomePage: React.FC<HomePageProps> = ({ onNavigate, onLogout, user }) => {
                               height: '100%',
                               bgcolor: '#6b7280',
                               transform: 'translateX(-50%)',
-                              transition: 'background-color 0.3s ease',
                             }}
                           />
                         </Box>
                       ))}
                     </Box>
 
-                    {/* Floor label */}
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    {/* Floor label at the right */}
+                    <Box
+                      sx={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 1,
+                        width: 110,   // ✅ fixed width instead of minWidth
+                        flexShrink: 0, // ✅ don’t let this shrink either
+                        paddingLeft: 2,
+                      }}
+                    >
                       <Typography
                         className="floorLabel"
                         sx={{
@@ -730,18 +728,13 @@ const HomePage: React.FC<HomePageProps> = ({ onNavigate, onLogout, user }) => {
                       >
                         Floor {floorNum}
                       </Typography>
-                      <Box
-                        className="pulseDot"
-                        sx={{
-                          width: 6,
-                          height: 6,
-                          borderRadius: '50%',
-                          backgroundColor: 'transparent',
-                        }}
-                      />
                     </Box>
+
                   </Box>
-                ))}
+                </Box>
+              ))}
+
+
               </Box>
             </Box>
           </Box>

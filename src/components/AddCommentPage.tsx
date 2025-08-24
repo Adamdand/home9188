@@ -37,13 +37,24 @@ const AddCommentPage: React.FC<AddCommentPageProps> = ({ floor, onNavigate }) =>
         return;
       }
 
+      interface Comment {
+        id: string;
+        text: string;
+        timestamp: any;
+        floor: number;
+        reported?: boolean;
+        reporter_usernames?: string[];
+      }
+
       await addDoc(collection(db, 'comments'), {
         text: comment.trim(),
         floor,
         timestamp: serverTimestamp(),
         userId: user.uid,
         email: user.email,
-        username: user.displayName || user.email?.split('@')[0] || 'Anonymous'
+        username: user.displayName || user.email?.split('@')[0] || 'Anonymous',
+        reported: false,
+        reporter_usernames: []
       });
 
       onNavigate('floor', floor);

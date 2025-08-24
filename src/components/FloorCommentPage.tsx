@@ -2,14 +2,18 @@ import React, { useState, useEffect, useRef } from 'react';
 import { collection, query, where, orderBy, onSnapshot } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { Page } from './AppRouter';
-import { Box, Button, Container, Typography, Avatar, Chip, Fade } from '@mui/material';
-import { Home, Add, Forum, AccessTime, People, ChatBubbleOutline, Person, ArrowDownward } from '@mui/icons-material';
+import { Box, Button, Container, Typography, Avatar, Chip, Fade, Tooltip  } from '@mui/material';
+import { Home, Add, Forum, AccessTime, People, ChatBubbleOutline, Person, ArrowDownward, ReportOutlined  } from '@mui/icons-material';
+import { updateDoc, doc, getDoc, arrayUnion, arrayRemove} from 'firebase/firestore';
+import { getAuth } from 'firebase/auth';
 
 interface Comment {
   id: string;
   text: string;
   timestamp: any;
   floor: number;
+  reported?: boolean;
+  reporter_usernames?: string[];
 }
 
 interface FloorCommentPageProps {
@@ -23,6 +27,63 @@ const FloorCommentPage: React.FC<FloorCommentPageProps> = ({ floor, onNavigate }
   const [animateComments, setAnimateComments] = useState(false);
   const [showJumpToBottom, setShowJumpToBottom] = useState(false);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const [user, setUser] = useState<any>(null);
+  const [username, setUsername] = useState<string | null>(null);
+ 
+      useEffect(() => {
+        const auth = getAuth();
+        const currentUser = auth.currentUser;
+        setUser(currentUser);
+
+        const fetchUsername = async () => {
+          if (currentUser?.uid) {
+            console.log("Fetching Firestore user for uid:", currentUser.uid);
+            const userDoc = await getDoc(doc(db, "users", currentUser.uid));
+            if (userDoc.exists()) {
+              setUsername(userDoc.data().username);
+            }
+          }
+        };
+
+        fetchUsername();
+      }, []); // run once on mount
+                
+
+      // Report function
+      const handleReport = async (commentId: string) => {
+        if (!username) return;
+
+        try {
+          const commentRef = doc(db, "comments", commentId);
+          const commentSnap = await getDoc(commentRef);
+
+          if (!commentSnap.exists()) return;
+
+          const commentData = commentSnap.data() as Comment;
+          const reporterUsernames = commentData.reporter_usernames || []; // default to empty array
+          const hasReported = reporterUsernames.includes(username);
+
+          if (hasReported) {
+            // User wants to un-report
+            const newReporterUsernames = reporterUsernames.filter((u) => u !== username);
+
+            await updateDoc(commentRef, {
+              reporter_usernames: arrayRemove(username),
+              reported: newReporterUsernames.length > 0, // set reported=false if empty
+            });
+          } else {
+            // User wants to report
+            await updateDoc(commentRef, {
+              reporter_usernames: arrayUnion(username),
+              reported: true,
+            });
+          }
+        } catch (error) {
+          console.error("Error toggling report:", error);
+        }
+      };
+          
+  
 
   // Function to scroll to bottom
   const scrollToBottom = () => {
@@ -517,6 +578,29 @@ const FloorCommentPage: React.FC<FloorCommentPageProps> = ({ floor, onNavigate }
                               },
                             }}
                           />
+                          {/* Report button */}
+                         <Tooltip
+                            title={
+                              comment.reporter_usernames?.includes(username || "")
+                                ? "Undo report comment"
+                                : "Report comment"
+                            }
+                            arrow
+                          >
+                            <ReportOutlined
+                              onClick={() => handleReport(comment.id)}
+                              sx={{
+                                fontSize: 20,
+                                color: comment.reporter_usernames?.includes(username || "")
+                                  ? "#f87171" // red if already reported
+                                  : "#9ca3af",
+                                cursor: "pointer",
+                                "&:hover": {
+                                  color: "#ef4444",
+                                },
+                              }}
+                            />
+                          </Tooltip>
                         </Box>
 
                         {/* Comment Content */}
